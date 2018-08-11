@@ -32,6 +32,9 @@
 # Python is not my native language, so sorry for awful non-pythonic style.
 # Please, note, that this code is not perfect and not everything might be decompiled 100% correctly.
 
+# However, I have done some testing and seems to work pretty well on games FoxTail, Romemary, Dreamcat Adventures and OpenQuest.
+# Only known unsupported line is:  if(EncryptionBroken == true && SolvedPuzzle = true && AllPieces != true) {...}
+
 # ========
 # CONTACTS
 # ========
@@ -53,6 +56,7 @@
 
 from struct import unpack
 from copy import deepcopy
+import traceback
 
 import sys
 fn = sys.argv[1]
@@ -128,6 +132,8 @@ class WinterMuteDecompiler:
             "II_CMP_G":  ">",
             "II_CMP_LE": "<=",
             "II_CMP_GE": ">=",
+            "II_CMP_STRICT_EQ": "===",
+            "II_CMP_STRICT_NE": "!==",
         }
 
     table_names = ["function","symbol","event","external","method"]
@@ -135,10 +141,6 @@ class WinterMuteDecompiler:
     def __init__(self, data):
         self.data = data
         self.offsets = unpack("LLLLLLLL",data[:32])
-        self.read_header()
-        self.read_asm()
-        self.create_medium()
-        self.process_medium()
 
     def read_int(self):
         result = unpack("L",self.data[self.ptr:self.ptr+4])[0]
@@ -674,11 +676,45 @@ class WinterMuteDecompiler:
 
 with open(fn,"rb") as f:
     wmd = WinterMuteDecompiler(f.read())
-    if  True:
-        wmd.dump_header(fn.replace(".script",".wmeheader"))
-    if  True:
-        wmd.dump_disasm(fn.replace(".script",".wmeasm"))
-    if  False:
-        wmd.dump_medium(fn.replace(".script",".wmemedium"))
-    if  True:
-        wmd.dump_final(fn.replace(".script",".wmescript"))
+    broken_flag = ""
+
+    try:
+        wmd.read_header()
+    except Exception as ex:
+        traceback.print_exc()
+        broken_flag = ".broken"
+    if  False or broken_flag:
+        wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
+
+
+    try:
+        wmd.read_asm()
+    except Exception as ex:
+        traceback.print_exc()
+        broken_flag = ".broken"
+        wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
+    if  False or broken_flag:
+        wmd.dump_disasm(fn.replace(".script",".wmeasm"+broken_flag))
+
+
+    try:
+        wmd.create_medium()
+    except Exception as ex:
+        traceback.print_exc()
+        broken_flag = ".broken"
+        wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
+        wmd.dump_disasm(fn.replace(".script",".wmeasm"+broken_flag))
+    if  False or broken_flag:
+        wmd.dump_medium(fn.replace(".script",".wmemedium"+broken_flag))
+
+
+    try:
+        wmd.process_medium()
+    except Exception as ex:
+        traceback.print_exc()
+        broken_flag = ".broken"
+        wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
+        wmd.dump_disasm(fn.replace(".script",".wmeasm"+broken_flag))
+        wmd.dump_medium(fn.replace(".script",".wmemedium"+broken_flag))
+    if  True or broken_flag:
+        wmd.dump_final(fn.replace(".script",".wmescript"+broken_flag))
