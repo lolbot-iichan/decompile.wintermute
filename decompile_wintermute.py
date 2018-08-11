@@ -33,7 +33,8 @@
 # Please, note, that this code is not perfect and not everything might be decompiled 100% correctly.
 
 # However, I have done some testing and seems to work pretty well on games FoxTail, Romemary, Dreamcat Adventures and OpenQuest.
-# Only known unsupported line is:  if(EncryptionBroken == true && SolvedPuzzle = true && AllPieces != true) {...}
+# Known unsupported line from Openquest is:  if(EncryptionBroken == true && SolvedPuzzle = true && AllPieces != true) {...}
+# Several scripts of Tanya Grotter games produce errors and/or fail to decompile completely.
 
 # ========
 # CONTACTS
@@ -56,10 +57,18 @@
 
 from struct import unpack
 from copy import deepcopy
+
+import re
+import sys
 import traceback
 
-import sys
 fn = sys.argv[1]
+
+LB_WRITE_HEADERS = False
+LB_WRITE_DISASM  = True
+LB_WRITE_MEDIUM  = True
+LB_WRITE_HIGHLVL = True
+LB_WRITE_RESULT  = True
 
 class WinterMuteDecompiler:
     opcodes = [
@@ -300,6 +309,7 @@ class WinterMuteDecompiler:
         self.process_medium_switch_break()
         self.process_medium_while_break()
         self.process_medium_if_else()
+        return
 
     def process_medium_def_pop(self):
         items = sorted(self.high.items())
@@ -316,10 +326,11 @@ class WinterMuteDecompiler:
         for idx,(ptr,(op,param)) in enumerate(items):
             if  idx>0:
                 pptr,(pop,pparam) = items[idx-1]
-                if  op == "III_POP" and pop == "III_POP" and pparam[0] == None and param[1] == "<<<OBJECT>>>":
-                    value = pparam[1]
-                    del self.high[pptr]
-                    self.high[ptr] = ["III_POP",(param[0],"new "+value)]
+                if  op == "III_POP" and pop == "III_POP" and pparam[0] == None and "<<<OBJECT>>>" in param[1]:
+                    value = param[1].replace("<<<OBJECT>>>","new "+pparam[1],1)
+                    if  not "<<<OBJECT>>>" in value:
+                        del self.high[pptr]
+                        self.high[ptr] = ["III_POP",(param[0],value)]
 
     def process_medium_correct_stack(self):
         items = sorted(self.high.items())
@@ -445,7 +456,7 @@ class WinterMuteDecompiler:
                         del self.high[pptr]
                         self.high[ptr][1] += 1
                         self.high[last_switch][1] += [ptr]
-    #                    print("process_medium_switch_end: rule #1:", scope_stack[-1])
+#                        print("process_medium_switch_end: rule #1:", scope_stack[-1])
                     elif self.high[last_switch][1][2] == ptr:
                         pass
                     else:
@@ -455,7 +466,7 @@ class WinterMuteDecompiler:
                         del self.high[pptr]
                         self.high[ptr] = ["III_SCOPE_END",1]
                         self.high[last_switch][1] += [ptr]
-    #                    print("process_medium_switch_end:  rule #2:", scope_stack[-1])
+#                        print("process_medium_switch_end:  rule #2:", scope_stack[-1])
                     elif self.high[last_switch][1][2] == ptr:
                         pass
                     else:
@@ -638,6 +649,11 @@ class WinterMuteDecompiler:
             for ptr,item in sorted(self.medium.items()):
                 out.write("%d: %s %s\n"%(ptr,item[0],item[1]))
 
+    def dump_high(self, fn):
+        with open(fn,"w") as out:
+            for ptr,item in sorted(self.high.items()):
+                out.write("%d: %s %s\n"%(ptr,item[0],item[1]))
+
     def dump_final(self, fn):
         scope_stack = []
         with open(fn,"w") as out:
@@ -683,7 +699,7 @@ with open(fn,"rb") as f:
     except Exception as ex:
         traceback.print_exc()
         broken_flag = ".broken"
-    if  False or broken_flag:
+    if  LB_WRITE_HEADERS or broken_flag:
         wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
 
 
@@ -693,7 +709,7 @@ with open(fn,"rb") as f:
         traceback.print_exc()
         broken_flag = ".broken"
         wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
-    if  False or broken_flag:
+    if  LB_WRITE_DISASM or broken_flag:
         wmd.dump_disasm(fn.replace(".script",".wmeasm"+broken_flag))
 
 
@@ -704,7 +720,7 @@ with open(fn,"rb") as f:
         broken_flag = ".broken"
         wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
         wmd.dump_disasm(fn.replace(".script",".wmeasm"+broken_flag))
-    if  False or broken_flag:
+    if  LB_WRITE_MEDIUM or broken_flag:
         wmd.dump_medium(fn.replace(".script",".wmemedium"+broken_flag))
 
 
@@ -716,5 +732,8 @@ with open(fn,"rb") as f:
         wmd.dump_header(fn.replace(".script",".wmeheader"+broken_flag))
         wmd.dump_disasm(fn.replace(".script",".wmeasm"+broken_flag))
         wmd.dump_medium(fn.replace(".script",".wmemedium"+broken_flag))
-    if  True or broken_flag:
+    if  LB_WRITE_HIGHLVL or broken_flag:
+        wmd.dump_high(fn.replace(".script",".wmehigh"+broken_flag))
+
+    if  LB_WRITE_RESULT or broken_flag:
         wmd.dump_final(fn.replace(".script",".wmescript"+broken_flag))
