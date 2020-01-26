@@ -156,6 +156,8 @@ class WinterMuteDecompiler:
             "II_CMP_STRICT_NE": "!==",
         }
 
+    exttypes = ["","bool","long","char","string","float","double","membuffer"]
+
     table_names = ["function","symbol","event","external","method"]
 
     def __init__(self, data):
@@ -181,6 +183,7 @@ class WinterMuteDecompiler:
     def read_header(self):
         self.fname = self.data[32:self.offsets[2]].strip().decode("utf-8")
         self.tables = {}
+        self.externals = []
         for i,title in enumerate(self.table_names):
             self.tables[title] = {}
             self.ptr = self.offsets[i+3]
@@ -191,7 +194,12 @@ class WinterMuteDecompiler:
                     self.tables[title][idx] = self.read_string()
             else:
                 for i in range(l):
-                    print("externals are not supported, mail me if you really need them")
+                    dllname = self.read_string()
+                    fname = self.read_string()
+                    ftype = ["stdcall","cdecl","thiscall"][self.read_int()]
+                    fret = self.exttypes[self.read_int()]
+                    fargs = [self.exttypes[self.read_int()] for i in range(self.read_int())]
+                    self.externals += [(dllname, fname, ftype, fret, fargs)]
 
     def table_lookup(self, id):
         for t in self.table_names:
@@ -645,6 +653,9 @@ class WinterMuteDecompiler:
 
     def process_final(self):
         self.final_text = []
+        for (dllname, fname, ftype, fret, fargs) in self.externals:
+            txt = 'external "%s" %s %s %s(%s);' % (dllname, ftype, fret, fname, ', '.join(fargs))
+            self.final_text += [txt.replace("  "," ")+"\n"]
         scope_stack = []
         for ptr,(op,param) in sorted(self.high.items()):
             fprefix = ""
@@ -691,7 +702,9 @@ class WinterMuteDecompiler:
             for t in self.table_names:
                 for i,j in self.tables[t].items():
                     out.write("%s %s: %u\n"%(t,j,i))
-                    
+            for (dllname, fname, ftype, fret, fargs) in self.externals:
+                txt = 'external "%s" %s %s %s(%s);' % (dllname, ftype, fret, fname, ', '.join(fargs))
+                out.write(txt.replace("  "," ") + "\n")
 
     def dump_disasm(self, fn):
         with open(fn,"w") as out:
