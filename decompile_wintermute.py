@@ -1,5 +1,5 @@
 ﻿"""
- " WinterMute Engine scripts decompiler v1.0
+ " WinterMute Engine scripts decompiler v1.1
  "
  " This program is free software; you can redistribute it and/or
  " modify it under the terms of the GNU General Public License
@@ -17,7 +17,7 @@
  "
 """
 
-# WinterMute Engine scripts decompiler v1.0
+# WinterMute Engine scripts decompiler v1.1
 # I wrote this code while inspecting sources of "FoxTail" by Gingertips Studio for improving support of FoxTail at ScummVM. 
 # Pipeline is like this:
 # 1. wmeasm:       transform binary format to asm-like format
