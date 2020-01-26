@@ -65,9 +65,9 @@ import traceback
 fn = sys.argv[1]
 
 LB_WRITE_HEADERS = False
-LB_WRITE_DISASM  = True
-LB_WRITE_MEDIUM  = True
-LB_WRITE_HIGHLVL = True
+LB_WRITE_DISASM  = False
+LB_WRITE_MEDIUM  = False
+LB_WRITE_HIGHLVL = False
 LB_WRITE_RESULT  = True
 
 class WinterMuteDecompiler:
@@ -632,6 +632,43 @@ class WinterMuteDecompiler:
         if  len(scope_stack) == 0:
             print("process_medium_if_else: stack is exhausted on exit")
 
+    def process_final(self):
+        self.final_text = []
+        scope_stack = []
+        for ptr,(op,param) in sorted(self.high.items()):
+            fprefix = ""
+            prefix = fprefix + len(scope_stack)*"\t"
+            if op == "III_SCOPE":
+                if  param[0] == "case":
+                    self.final_text += [prefix+"case %s:\n"%param[1]]
+                elif param[0] == "default":
+                    self.final_text += [prefix+"default:\n"]
+                elif param[0] == "event":
+                    self.final_text += [prefix+"on \"%s\" {\n"%param[1]]
+                elif param[0] in ["method","function"]:
+                    self.final_text += [prefix+"%s %s {\n"%(param[0],param[1])]
+                elif param[0] in ["if","while","switch"]:
+                    self.final_text += [prefix+"%s(%s) {\n"%(param[0],param[1])]
+                elif param[0] == "else":
+                    self.final_text += [prefix+"else {\n"]
+                else:
+                    self.final_text += [prefix+"//TODO %s\n"%repr(param)]
+                scope_stack += [param]
+            elif op == "III_SCOPE_END":
+                for i in range(param):
+                    parent = scope_stack.pop()
+                    if  parent[0] not in ["case","default"]:
+                        prefix = fprefix + len(scope_stack)*"\t"
+                        self.final_text += [prefix+"}\n"]
+            elif op == "III_LINE":
+                self.final_text += [prefix+param+"\n"]
+            elif op == "III_JMP":
+                self.final_text += [prefix+"//TODO: unprocessed goto\n"]
+            elif op == "III_RET_EOF":
+                if  scope_stack:
+                    self.final_text += [prefix+"//TODO: non-empty stack on EOF: %s"%scope_stack+"\n"]
+        self.final_text = "".join(self.final_text)
+
     def dump_header(self, fn):
         with open(fn,"w") as out:
             for t in self.table_names:
@@ -655,41 +692,10 @@ class WinterMuteDecompiler:
                 out.write("%d: %s %s\n"%(ptr,item[0],item[1]))
 
     def dump_final(self, fn):
-        scope_stack = []
         with open(fn,"w") as out:
-            for ptr,(op,param) in sorted(self.high.items()):
-                fprefix = ""
-                prefix = fprefix + len(scope_stack)*"\t"
-                if op == "III_SCOPE":
-                    if  param[0] == "case":
-                        out.write(prefix+"case %s:\n"%param[1])
-                    elif param[0] == "default":
-                        out.write(prefix+"default:\n")
-                    elif param[0] == "event":
-                        out.write(prefix+"on \"%s\" {\n"%param[1])
-                    elif param[0] in ["method","function"]:
-                        out.write(prefix+"%s %s {\n"%(param[0],param[1]))
-                    elif param[0] in ["if","while","switch"]:
-                        out.write(prefix+"%s(%s) {\n"%(param[0],param[1]))
-                    elif param[0] == "else":
-                        out.write(prefix+"else {\n")
-                    else:
-                        out.write(prefix+"//TODO %s\n"%repr(param))
-                    scope_stack += [param]
-                elif op == "III_SCOPE_END":
-                    for i in range(param):
-                        parent = scope_stack.pop()
-                        if  parent[0] not in ["case","default"]:
-                            prefix = fprefix + len(scope_stack)*"\t"
-                            out.write(prefix+"}\n")
-                elif op == "III_LINE":
-                    out.write(prefix+param+"\n")
-                elif op == "III_JMP":
-                    out.write(prefix+"//TODO: goto %d"%param+"\n")
-                elif op == "III_RET_EOF":
-                    if  scope_stack:
-                        out.write(prefix+"//TODO: non-empty stack on EOF: %s"%scope_stack+"\n")
+            out.write(self.final_text)
 
+print(fn)
 with open(fn,"rb") as f:
     wmd = WinterMuteDecompiler(f.read())
     broken_flag = ""
@@ -736,4 +742,5 @@ with open(fn,"rb") as f:
         wmd.dump_high(fn.replace(".script",".wmehigh"+broken_flag))
 
     if  LB_WRITE_RESULT or broken_flag:
+        wmd.process_final()
         wmd.dump_final(fn.replace(".script",".wmescript"+broken_flag))
