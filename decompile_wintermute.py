@@ -59,10 +59,21 @@ from struct import unpack
 from copy import deepcopy
 
 import re
+import os
 import sys
 import traceback
 
+if  len(sys.argv) == 1 or len(sys.argv) > 3:
+    print("Usage: %s <path-to-compiled-script> [<path-to-inc-folder>]")
+    sys.exit(-1)
 fn = sys.argv[1]
+inc = {}
+if  len(sys.argv) == 3:
+    for i in os.listdir(sys.argv[2]):
+        with open(sys.argv[2]+os.sep+i,"r") as f:
+            txt = f.read().rstrip()
+            if  txt:
+                inc[i] = [t+"\n" for t in txt.split("\n")]
 
 LB_WRITE_HEADERS = False
 LB_WRITE_DISASM  = False
@@ -667,6 +678,12 @@ class WinterMuteDecompiler:
             elif op == "III_RET_EOF":
                 if  scope_stack:
                     self.final_text += [prefix+"//TODO: non-empty stack on EOF: %s"%scope_stack+"\n"]
+            for i in inc:
+                ll = len(inc[i])
+                if  len(self.final_text) >= ll:
+                    if  all([self.final_text[c-ll] == inc[i][c] for c in range(ll)]):
+                        print("include " + i)
+                        self.final_text = self.final_text[:-ll] + ['#include "include\\%s"\n' % i]
         self.final_text = "".join(self.final_text)
 
     def dump_header(self, fn):
